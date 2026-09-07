@@ -1,0 +1,28 @@
+# Datasets
+dataset/
+dataset/**
+
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Model weights & Checkpoints
+*.pt
+*.pth
+*.onnx
+runs/
