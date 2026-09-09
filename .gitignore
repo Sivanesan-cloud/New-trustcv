@@ -1,9 +1,19 @@
 # Datasets
 dataset/
 dataset/**
+DATASET/
+DATASET/**
+*.csv
+*.json
+*.jsonl
+*.parquet
+*.pkl
+*.zip
+*.tar.gz
 
 # Virtual Environment
 .venv/
+.venv311/
 venv/
 env/
 

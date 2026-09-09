@@ -3,8 +3,13 @@ import hashlib
 import json
 from datetime import datetime
 
-DATASET = Path(r"E:\TrustCV\dataset\helmet")
-OUTPUT = Path(r"E:\TrustCV\manifests\dataset_manifest.json")
+DATASET = Path(
+    r"C:\TRUSTCV\New-trustcv\DATASET"
+)
+
+OUTPUT = Path(
+    r"C:\TRUSTCV\New-trustcv\manifests\dataset_manifest.json"
+)
 
 
 def calculate_sha256(file_path):

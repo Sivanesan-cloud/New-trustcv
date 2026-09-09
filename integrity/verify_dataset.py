@@ -2,8 +2,13 @@ from pathlib import Path
 import hashlib
 import json
 
-DATASET = Path(r"E:\TrustCV\dataset\helmet")
-MANIFEST = Path(r"E:\TrustCV\manifests\dataset_manifest.json")
+DATASET = Path(
+    r"C:\TRUSTCV\New-trustcv\DATASET"
+)
+
+MANIFEST = Path(
+    r"C:\TRUSTCV\New-trustcv\manifests\dataset_manifest.json"
+)
 
 
 def calculate_sha256(file_path):

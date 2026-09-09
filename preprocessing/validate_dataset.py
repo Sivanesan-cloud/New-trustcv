@@ -1,7 +1,8 @@
 from pathlib import Path
+# pyrefly: ignore [missing-import]
 from PIL import Image
 
-DATASET = Path(r"E:\TrustCV\dataset\helmet")
+DATASET = Path(r"C:\TRUSTCV\New-trustcv\DATASET")
 
 splits = ["train", "valid", "test"]
 
