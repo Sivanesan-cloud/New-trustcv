@@ -14,6 +14,7 @@ DATASET/**
 # Virtual Environment
 .venv/
 .venv311/
+.venv_gpu/
 venv/
 env/
 

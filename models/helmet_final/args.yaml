@@ -1,6 +1,6 @@
 task: detect
 mode: train
-model: C:\TRUSTCV\New-trustcv\models\helmet_final\weights\last.pt
+model: C:\TRUSTCV\New-trustcv\models\helmet_final\weights\epoch25.pt
 data: C:\TRUSTCV\New-trustcv\DATASET\data.yaml
 epochs: 30
 time: null
@@ -25,7 +25,7 @@ single_cls: false
 rect: false
 cos_lr: false
 close_mosaic: 10
-resume: C:\TRUSTCV\New-trustcv\models\helmet_final\weights\last.pt
+resume: C:\TRUSTCV\New-trustcv\models\helmet_final\weights\epoch25.pt
 amp: true
 fraction: 1.0
 profile: false
