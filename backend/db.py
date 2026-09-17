@@ -1,5 +1,6 @@
 import sqlite3
 import json
+import hashlib
 
 DB_PATH = r"C:\TRUSTCV\New-trustcv\database\trustcv.db"
 
@@ -88,3 +89,14 @@ def get_all_models():
     rows = cursor.fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+def compute_entry_hash(username, action, asset_type, asset_id, details, prev_hash):
+    raw = f"{username}|{action}|{asset_type}|{asset_id}|{details}|{prev_hash}"
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def log_action(username, action, asset_type, asset_id, details):
+    prev_hash = get_last_audit_hash()
+    entry_hash = compute_entry_hash(username, action, asset_type, asset_id, details, prev_hash)
+    insert_audit_log(username, action, asset_type, asset_id, details, prev_hash, entry_hash)
+    return entry_hash
