@@ -1,7 +1,5 @@
 import json
-from passlib.context import CryptContext
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+import bcrypt
 
 USERS_PATH = r"C:\TRUSTCV\New-trustcv\backend\users.json"
 
@@ -12,13 +10,14 @@ users = [
 
 output = {"users": []}
 for u in users:
+    hashed = bcrypt.hashpw(u["password"].encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
     output["users"].append({
         "username": u["username"],
-        "password_hash": pwd_context.hash(u["password"]),
+        "password_hash": hashed,
         "role": u["role"]
     })
 
 with open(USERS_PATH, "w") as f:
     json.dump(output, f, indent=4)
 
-print("Users created with hashed passwords.")
+print("Users created with hashed passwords successfully!")

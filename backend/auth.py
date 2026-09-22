@@ -1,6 +1,6 @@
+import bcrypt
 from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
-from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 import json
@@ -11,7 +11,6 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 USERS_PATH = r"C:\TRUSTCV\New-trustcv\backend\users.json"
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 
@@ -20,12 +19,15 @@ def load_users():
         return json.load(f)["users"]
 
 
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    try:
+        return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
+    except Exception:
+        return False
 
 
-def hash_password(password):
-    return pwd_context.hash(password)
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def authenticate_user(username, password):
@@ -34,6 +36,7 @@ def authenticate_user(username, password):
         if user["username"] == username and verify_password(password, user["password_hash"]):
             return user
     return None
+
 
 
 def create_access_token(data: dict):
