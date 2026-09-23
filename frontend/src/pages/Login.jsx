@@ -17,7 +17,7 @@ export default function Login({ onLogin }) {
       params.append('username', username)
       params.append('password', password)
       const { data } = await axios.post(
-        'http://localhost:8000/login',
+        '/login',
         params,
         { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
       )

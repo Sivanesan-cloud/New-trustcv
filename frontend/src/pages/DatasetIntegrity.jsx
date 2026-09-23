@@ -59,18 +59,30 @@ const FILE_TYPE_ICONS = {
   img: '🖼️', json: '{ }', mask: '▨', npy: '⊞', yaml: '⇌', default: '📄'
 }
 
-const FILTER_TABS = [
-  { key: 'ALL',       label: 'All',       count: 48250 },
-  { key: 'UNCHANGED', label: 'Unchanged', count: 48242 },
-  { key: 'MODIFIED',  label: 'Modified',  count: 1     },
-  { key: 'ADDED',     label: 'Added',     count: 8     },
-  { key: 'DELETED',   label: 'Deleted',   count: 0     },
-]
+function parseOutputCounts(output = '') {
+  let unchanged = 55394
+  let modified  = 1
+  let added     = 8
+  let deleted   = 0
+
+  const mUnchanged = output.match(/Unchanged\s*:\s*(\d+)/i)
+  const mModified  = output.match(/Modified\s*:\s*(\d+)/i)
+  const mAdded     = output.match(/Added\s*:\s*(\d+)/i)
+  const mDeleted   = output.match(/Deleted\s*:\s*(\d+)/i)
+
+  if (mUnchanged) unchanged = parseInt(mUnchanged[1], 10)
+  if (mModified)  modified  = parseInt(mModified[1], 10)
+  if (mAdded)     added     = parseInt(mAdded[1], 10)
+  if (mDeleted)   deleted   = parseInt(mDeleted[1], 10)
+
+  const total = unchanged + modified + added + deleted
+  return { unchanged, modified, added, deleted, total }
+}
 
 function parseStatus(output = '') {
   const u = output.toUpperCase()
   if (u.includes('PASS') || u.includes('OK') || u.includes('MATCH')) return 'VERIFIED'
-  if (u.includes('FAIL') || u.includes('MISMATCH') || u.includes('TAMPER')) return 'VIOLATION'
+  if (u.includes('FAIL') || u.includes('MISMATCH') || u.includes('TAMPER') || u.includes('VIOLATION') || u.includes('WARN')) return 'VIOLATION'
   return null
 }
 
@@ -109,6 +121,16 @@ export default function DatasetIntegrity() {
   const currentStatus = apiResult
     ? (parseStatus(apiResult.output || '') || simToggle)
     : simToggle
+
+  const counts = parseOutputCounts(apiResult?.output || '')
+
+  const filterTabs = [
+    { key: 'ALL',       label: 'All',       count: counts.total     },
+    { key: 'UNCHANGED', label: 'Unchanged', count: counts.unchanged },
+    { key: 'MODIFIED',  label: 'Modified',  count: counts.modified  },
+    { key: 'ADDED',     label: 'Added',     count: counts.added     },
+    { key: 'DELETED',   label: 'Deleted',   count: counts.deleted   },
+  ]
 
   return (
     <div className="fade-in">
@@ -177,7 +199,7 @@ export default function DatasetIntegrity() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-500)', display: 'flex', gap: 12 }}>
-                <span>📁 Total Files: <strong style={{ color: 'var(--text-700)' }}>48,250</strong></span>
+                <span>📁 Total Files: <strong style={{ color: 'var(--text-700)' }}>{counts.total.toLocaleString()}</strong></span>
                 <span>• Root: <code style={{ fontSize: '0.7rem', color: 'var(--primary)', fontFamily: 'JetBrains Mono' }}>0x9f4b...38e1</code></span>
               </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-500)' }}>
@@ -193,10 +215,10 @@ export default function DatasetIntegrity() {
           {/* Center: stat grid */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             {[
-              { label: 'Unchanged', sublabel: 'Hash match verified',   dot: 'green', value: '48,242' },
-              { label: 'Modified',  sublabel: 'Zero drift detected',   dot: 'blue',  value: '0'      },
-              { label: 'Added',     sublabel: 'Verified additions',    dot: 'blue',  value: '8'      },
-              { label: 'Deleted',   sublabel: 'No pruned tensors',     dot: 'gray',  value: '0'      },
+              { label: 'Unchanged', sublabel: 'Hash match verified',   dot: 'green', value: counts.unchanged.toLocaleString() },
+              { label: 'Modified',  sublabel: 'Zero drift detected',   dot: 'blue',  value: counts.modified.toLocaleString()  },
+              { label: 'Added',     sublabel: 'Verified additions',    dot: 'blue',  value: counts.added.toLocaleString()     },
+              { label: 'Deleted',   sublabel: 'No pruned tensors',     dot: 'gray',  value: counts.deleted.toLocaleString()   },
             ].map(({ label, sublabel, dot, value }) => (
               <div key={label} className="section-card stat-block">
                 <div className="stat-label">
@@ -208,6 +230,7 @@ export default function DatasetIntegrity() {
               </div>
             ))}
           </div>
+
 
           {/* Right: sentinel panel */}
           <div className="section-card" style={{ padding: 16, minWidth: 180, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -253,7 +276,7 @@ export default function DatasetIntegrity() {
 
             {/* Tabs */}
             <div className="filter-tabs">
-              {FILTER_TABS.map(({ key, label, count }) => (
+              {filterTabs.map(({ key, label, count }) => (
                 <button
                   key={key}
                   className={`filter-tab ${activeTab === key ? 'filter-tab--active' : ''}`}
@@ -365,7 +388,8 @@ export default function DatasetIntegrity() {
               <tr>
                 <td colSpan={6}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span>Showing <strong>1 to 7</strong> of <strong>48,250</strong> files &nbsp;•&nbsp; Merkle Verification DAG: Passed</span>
+                    <span>Showing <strong>1 to 7</strong> of <strong>{counts.total.toLocaleString()}</strong> files &nbsp;•&nbsp; Merkle Verification DAG: Passed</span>
+
                     {/* Pagination */}
                     <div className="pagination" style={{ padding: 0 }}>
                       <button className="page-btn page-btn--nav">⟨⟨</button>

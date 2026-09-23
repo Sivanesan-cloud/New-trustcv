@@ -7,9 +7,10 @@ import axios from 'axios'
  */
 const api = axios.create({
   baseURL: '',   // Vite proxy handles /api → localhost:8000
-  timeout: 30000,
+  timeout: 120000, // 120 seconds to allow full verification of 55,403 dataset files
   headers: { 'Content-Type': 'application/json' },
 })
+
 
 // ── Request interceptor: attach JWT token ───────────────────────────────────
 api.interceptors.request.use(

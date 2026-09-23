@@ -86,23 +86,23 @@ print("\n------------------------------")
 if modified:
     print("\nMODIFIED FILES:")
     for path in modified[:20]:
-        print(f"  🔴 {path}")
+        print(f"  [MODIFIED] {path}")
 
 if added:
     print("\nADDED FILES:")
     for path in added[:20]:
-        print(f"  🟠 {path}")
+        print(f"  [ADDED] {path}")
 
 if deleted:
     print("\nDELETED FILES:")
     for path in deleted[:20]:
-        print(f"  🔵 {path}")
+        print(f"  [DELETED] {path}")
 
 print("\n==============================")
 
 if not modified and not added and not deleted:
-    print("STATUS: ✅ DATASET INTEGRITY VERIFIED")
+    print("STATUS: [OK] DATASET INTEGRITY VERIFIED")
 else:
-    print("STATUS: ⚠️ DATASET INTEGRITY VIOLATION")
+    print("STATUS: [WARN] DATASET INTEGRITY VIOLATION")
 
-print("==============================")
+print("==============================")

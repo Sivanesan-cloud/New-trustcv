@@ -23,9 +23,10 @@ c.execute("DELETE FROM audit_logs WHERE username IN ('alex.mercer','system-watch
 
 # ── Dataset versions ───────────────────────────────────────────────────────
 datasets = [
-    ("DEMO-Autonomous-Vision-HQ-2025", "v4.2", sha256("av-hq-2025-v4.2"), 48250, "alex.mercer", "VERIFIED"),
+    ("DEMO-Autonomous-Vision-HQ-2025", "v4.2", sha256("av-hq-2025-v4.2"), 55403, "alex.mercer", "VERIFIED"),
     ("DEMO-COCO-Val", "v3.2", sha256("coco-val-v3.2"), 5000, "elena.rostova", "VERIFIED"),
 ]
+
 for d in datasets:
     c.execute("""
         INSERT OR IGNORE INTO dataset_versions (dataset_name, version, manifest_hash, total_files, created_by, status)
