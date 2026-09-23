@@ -350,7 +350,7 @@ export default function SystemStatus() {
   const pingBackend = useCallback(async () => {
     const t0 = performance.now()
     try {
-      const res = await api.get('/api/')
+      const res = await api.get('/')
       const ms = Math.round(performance.now() - t0)
       setBackendStatus(true)
       setBackendMs(ms)
@@ -359,7 +359,7 @@ export default function SystemStatus() {
       setUpSince(s => s || new Date())
     } catch {
       try {
-        // Try direct FastAPI (no /api prefix)
+        // Fallback fetch
         const res2 = await fetch('http://localhost:8000/', { signal: AbortSignal.timeout(3000) })
         const ms = Math.round(performance.now() - t0)
         const json = await res2.json()
@@ -382,8 +382,8 @@ export default function SystemStatus() {
     setStatsLoading(true)
     try {
       const [statsRes, sumRes] = await Promise.all([
-        api.get('/api/db/stats').catch(() => api.get('/db/stats').catch(() => null)),
-        api.get('/api/dashboard/summary').catch(() => api.get('/dashboard/summary').catch(() => null)),
+        api.get('/db/stats').catch(() => null),
+        api.get('/dashboard/summary').catch(() => null),
       ])
       if (statsRes) setDbStats(statsRes.data?.db_stats ?? null)
       if (sumRes) setSummary(sumRes.data ?? null)
@@ -399,11 +399,8 @@ export default function SystemStatus() {
     const cfg = TABLE_CONFIGS[key]
     setTableData(prev => ({ ...prev, [key]: { rows: prev[key]?.rows || [], loading: true, error: null } }))
     try {
-      // Try with /api prefix (Vite proxy), then direct
-      let data
-      try { data = (await api.get(`/api${cfg.endpoint}`)).data }
-      catch { data = (await api.get(cfg.endpoint)).data }
-      const rows = cfg.transform(data)
+      const res = await api.get(cfg.endpoint)
+      const rows = cfg.transform(res.data)
       setTableData(prev => ({ ...prev, [key]: { rows, loading: false, error: null } }))
     } catch (e) {
       const is403 = e?.response?.status === 403 || e?.response?.status === 401
