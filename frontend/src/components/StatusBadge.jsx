@@ -1,34 +1,29 @@
 import React from 'react'
 
-const STATUS_MAP = {
-  VERIFIED:  { cls: 'badge--verified',  dot: 'green',  label: 'Verified'   },
-  SUCCESS:   { cls: 'badge--success',   dot: 'green',  label: 'Success'    },
-  APPROVED:  { cls: 'badge--approved',  dot: 'blue',   label: 'Approved'   },
-  VIOLATION: { cls: 'badge--violation', dot: 'red',    label: 'Violation'  },
-  TAMPERED:  { cls: 'badge--tampered',  dot: 'red',    label: 'Tampered'   },
-  FAILED:    { cls: 'badge--error',     dot: 'red',    label: 'Failed'     },
-  ERROR:     { cls: 'badge--error',     dot: 'red',    label: 'Error'      },
-  MODIFIED:  { cls: 'badge--modified',  dot: 'red',    label: 'Modified'   },
-  UNCHANGED: { cls: 'badge--unchanged', dot: 'gray',   label: 'Unchanged'  },
-  ADDED:     { cls: 'badge--added',     dot: 'blue',   label: 'Added'      },
-  DELETED:   { cls: 'badge--deleted',   dot: 'gray',   label: 'Deleted'    },
-  PENDING:   { cls: 'badge--pending',   dot: 'gray',   label: 'Pending'    },
+const CONFIG = {
+  VERIFIED:  { cls: 'badge-verified',  icon: '✅', label: 'Verified'  },
+  APPROVED:  { cls: 'badge-approved',  icon: '✅', label: 'Approved'  },
+  SAFE:      { cls: 'badge-safe',      icon: '✅', label: 'Safe'      },
+  UNCHANGED: { cls: 'badge-verified',  icon: '✅', label: 'Unchanged' },
+  BLOCKED:   { cls: 'badge-blocked',   icon: '🔴', label: 'Blocked'   },
+  TAMPERED:  { cls: 'badge-tampered',  icon: '🔴', label: 'Tampered'  },
+  VIOLATION: { cls: 'badge-violation', icon: '🔴', label: 'Violation' },
+  FAILED:    { cls: 'badge-failed',    icon: '🔴', label: 'Failed'    },
+  MODIFIED:  { cls: 'badge-blocked',   icon: '🔴', label: 'Modified'  },
+  DELETED:   { cls: 'badge-blocked',   icon: '🔴', label: 'Deleted'   },
+  ADDED:     { cls: 'badge-info',      icon: '🔵', label: 'Added'     },
+  WARNING:   { cls: 'badge-warning',   icon: '⚠️',  label: 'Warning'  },
+  PENDING:   { cls: 'badge-pending',   icon: '⚠️',  label: 'Pending'  },
+  RUNNING:   { cls: 'badge-running',   icon: '🔵', label: 'Running'   },
 }
 
-export default function StatusBadge({ status = '', size = 'md' }) {
+export default function StatusBadge({ status, text }) {
   const key = (status || '').toUpperCase()
-  const { cls, dot, label } = STATUS_MAP[key] || {
-    cls: 'badge--unknown', dot: 'gray', label: status || 'Unknown',
-  }
-
+  const c   = CONFIG[key] || { cls: 'badge-info', icon: '●', label: status || '—' }
   return (
-    <span
-      className={`badge ${cls}`}
-      style={size === 'sm' ? { fontSize: '0.68rem', padding: '2px 8px' } : {}}
-      aria-label={`Status: ${label}`}
-    >
-      <span className={`badge-indicator badge-indicator--${dot}`} />
-      {label}
+    <span className={`badge ${c.cls}`}>
+      <span>{c.icon}</span>
+      {text || c.label}
     </span>
   )
 }

@@ -1,413 +1,229 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import api from '../api/axiosClient'
 import StatusBadge from '../components/StatusBadge'
+import Spinner from '../components/Spinner'
+import ErrorBanner from '../components/ErrorBanner'
 
-/* ── Mock data that mirrors the screenshot exactly ── */
-const MOCK_FILES = [
-  {
-    name: 'images/train/cam01_frame_04921.png',
-    type: 'img',
-    baseline: 'e3b0c44298...7852b855',
-    computed:  'e3b0c44298...7852b855',
-    status: 'UNCHANGED',
-  },
-  {
-    name: 'labels/val/annotation_box_8831.json',
-    type: 'json',
-    baseline: '7a4f910b88...f1092c41',
-    computed:  '99f2b87441...4379e022',
-    status: 'MODIFIED',
-  },
-  {
-    name: 'masks/sem/seg_ground_truth_102.png',
-    type: 'mask',
-    baseline: '(none / baseline new)',
-    computed:  '11d7f6c348...ef94821a',
-    status: 'ADDED',
-  },
-  {
-    name: 'images/test/night_fog_sensor_091.jpg',
-    type: 'img',
-    baseline: '58c93b1e84...fe482103',
-    computed:  '58c93b1e84...fe482103',
-    status: 'UNCHANGED',
-  },
-  {
-    name: 'weights/anchors/kmeans_priors_v4.npy',
-    type: 'npy',
-    baseline: '4c9829f124...48210381',
-    computed:  '4c9829f124...48210381',
-    status: 'UNCHANGED',
-  },
-  {
-    name: 'images/val/pedestrian_cross_004.png',
-    type: 'img',
-    baseline: '66fa902188...41982bca',
-    computed:  '66fa902188...41982bca',
-    status: 'UNCHANGED',
-  },
-  {
-    name: 'metadata/dataset_provenance_manifest.yaml',
-    type: 'yaml',
-    baseline: '963210ab78...23ca4199',
-    computed:  '(file missing / purged)',
-    status: 'DELETED',
-  },
-]
+const Ico = ({ d, size = 14, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d={d} />
+  </svg>
+)
 
-const FILE_TYPE_ICONS = {
-  img: '🖼️', json: '{ }', mask: '▨', npy: '⊞', yaml: '⇌', default: '📄'
+function CopyBtn({ text }) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <button className="copy-btn" onClick={() => {
+      navigator.clipboard?.writeText(text).catch(() => {})
+      setCopied(true); setTimeout(() => setCopied(false), 1500)
+    }}>
+      {copied ? '✓' : '⧉'}
+    </button>
+  )
 }
 
-function parseOutputCounts(output = '') {
-  let unchanged = 55394
-  let modified  = 1
-  let added     = 8
-  let deleted   = 0
-
-  const mUnchanged = output.match(/Unchanged\s*:\s*(\d+)/i)
-  const mModified  = output.match(/Modified\s*:\s*(\d+)/i)
-  const mAdded     = output.match(/Added\s*:\s*(\d+)/i)
-  const mDeleted   = output.match(/Deleted\s*:\s*(\d+)/i)
-
-  if (mUnchanged) unchanged = parseInt(mUnchanged[1], 10)
-  if (mModified)  modified  = parseInt(mModified[1], 10)
-  if (mAdded)     added     = parseInt(mAdded[1], 10)
-  if (mDeleted)   deleted   = parseInt(mDeleted[1], 10)
-
-  const total = unchanged + modified + added + deleted
-  return { unchanged, modified, added, deleted, total }
-}
-
-function parseStatus(output = '') {
-  const u = output.toUpperCase()
-  if (u.includes('PASS') || u.includes('OK') || u.includes('MATCH')) return 'VERIFIED'
-  if (u.includes('FAIL') || u.includes('MISMATCH') || u.includes('TAMPER') || u.includes('VIOLATION') || u.includes('WARN')) return 'VIOLATION'
-  return null
+function CountBox({ label, value, color }) {
+  return (
+    <div style={{
+      background: '#F8FAFC', border: `1.5px solid ${color}30`,
+      borderTop: `3px solid ${color}`,
+      borderRadius: 8, padding: '16px 18px', textAlign: 'center', flex: 1
+    }}>
+      <div style={{ fontSize: '1.75rem', fontWeight: 800, color, lineHeight: 1, marginBottom: 4 }}>
+        {value ?? '—'}
+      </div>
+      <div style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+        {label}
+      </div>
+    </div>
+  )
 }
 
 export default function DatasetIntegrity() {
-  const [verifying, setVerifying]   = useState(false)
-  const [apiResult, setApiResult]   = useState(null)
-  const [apiError,  setApiError]    = useState(null)
-  const [activeTab, setActiveTab]   = useState('ALL')
-  const [selected,  setSelected]    = useState({})
-  const [simToggle, setSimToggle]   = useState('VERIFIED') // 'VERIFIED' | 'VIOLATION'
+  const [datasets, setDatasets] = useState([])
+  const [loading, setLoading]   = useState(true)
+  const [verifying, setVerifying] = useState(false)
+  const [verifyResult, setVerifyResult] = useState(null)
+  const [error, setError]       = useState('')
 
-  const runVerify = useCallback(async () => {
-    setVerifying(true)
-    setApiResult(null)
-    setApiError(null)
+  const fetchDatasets = useCallback(async () => {
+    setLoading(true); setError('')
     try {
-      const { data } = await api.get('/dataset/verify')
-      setApiResult(data)
-    } catch (err) {
-      setApiError(err?.response?.data?.detail || err.message || 'Verification failed.')
-    } finally {
-      setVerifying(false)
-    }
+      const res = await api.get('/dataset/versions')
+      setDatasets(res.data.datasets || [])
+    } catch {
+      setError('Failed to load dataset versions from backend.')
+    } finally { setLoading(false) }
   }, [])
 
-  const filteredFiles = activeTab === 'ALL'
-    ? MOCK_FILES
-    : MOCK_FILES.filter(f => f.status === activeTab)
+  useEffect(() => { fetchDatasets() }, [fetchDatasets])
 
-  const toggleSelect = (i) =>
-    setSelected(prev => ({ ...prev, [i]: !prev[i] }))
+  async function handleVerify() {
+    setVerifying(true); setVerifyResult(null); setError('')
+    try {
+      const res = await api.get('/dataset/verify')
+      setVerifyResult({ ok: !res.data.errors, output: res.data.output, errors: res.data.errors })
+    } catch {
+      setError('Verification failed — backend error.')
+    } finally { setVerifying(false) }
+  }
 
-  const toggleSim = () =>
-    setSimToggle(s => s === 'VERIFIED' ? 'VIOLATION' : 'VERIFIED')
+  // Compute counts from dataset statuses
+  const verified   = datasets.filter(d => (d.status || '').toUpperCase() === 'VERIFIED').length
+  const modified   = datasets.filter(d => /modif/i.test(d.status || '')).length
+  const added      = datasets.filter(d => /add/i.test(d.status || '')).length
+  const deleted    = datasets.filter(d => /delet/i.test(d.status || '')).length
+  const hasViolation = modified > 0 || deleted > 0
 
-  const currentStatus = apiResult
-    ? (parseStatus(apiResult.output || '') || simToggle)
-    : simToggle
-
-  const counts = parseOutputCounts(apiResult?.output || '')
-
-  const filterTabs = [
-    { key: 'ALL',       label: 'All',       count: counts.total     },
-    { key: 'UNCHANGED', label: 'Unchanged', count: counts.unchanged },
-    { key: 'MODIFIED',  label: 'Modified',  count: counts.modified  },
-    { key: 'ADDED',     label: 'Added',     count: counts.added     },
-    { key: 'DELETED',   label: 'Deleted',   count: counts.deleted   },
-  ]
+  // Determine banner status: use verifyResult if available, else infer from data
+  const isVerified = verifyResult
+    ? (verifyResult.ok && !verifyResult.errors)
+    : (!hasViolation && datasets.length > 0)
 
   return (
-    <div className="fade-in">
-      {/* ── Breadcrumb ── */}
-      <div className="breadcrumb">
-        <span>🔒</span>
-        <span>SHA-256 DAG INTEGRITY LAYER</span>
-        <span className="breadcrumb-sep">•</span>
-        <span className="breadcrumb-sync">SYNC ID: #7829-MRKL</span>
-      </div>
-
-      {/* ── Page Header ── */}
+    <div className="page-wrap fade-in">
       <div className="page-header">
-        <div className="page-header-left">
-          <h1>Dataset Integrity &amp; Cryptographic<br/>Hashing</h1>
-          <p>
-            Continuous Merkle-tree hashing and tamper detection across training corpus, validation
-            splits, and annotation masks.
-          </p>
+        <div>
+          <div className="page-title">Dataset Integrity</div>
+          <div className="page-subtitle">Cryptographic verification of all dataset versions</div>
         </div>
-        <div className="page-header-actions">
-          <button className="btn btn-secondary">
-            ☁ Upload Baseline Manifest
+        <div className="page-actions">
+          <button className="btn btn-secondary btn-sm" onClick={fetchDatasets}>
+            <Ico d="M1 4v6h6 M23 20v-6h-6 M20.49 9A9 9 0 0 0 5.64 5.64L1 10 M3.51 15a9 9 0 0 0 14.85 3.36L23 14" size={13} />
+            Refresh
           </button>
           <button
             className="btn btn-primary"
-            id="verify-dataset-btn"
-            onClick={runVerify}
+            onClick={handleVerify}
             disabled={verifying}
           >
-            {verifying ? <><span className="spinner spinner--sm" /> Verifying…</> : '🛡 Verify Dataset'}
+            {verifying
+              ? <><span className="spinner spinner-sm" style={{ borderTopColor: '#fff' }} /> Verifying…</>
+              : <><Ico d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0 1 12 2.944a11.955 11.955 0 0 1-8.618 3.04A12.02 12.02 0 0 0 3 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" size={14} color="#fff" /> Verify Dataset</>
+            }
           </button>
+          {hasViolation && (
+            <button className="btn btn-danger">
+              <Ico d="M3 3v18h18 M3 9l9-7 7 5" size={13} color="#B91C1C" />
+              Restore Dataset
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="page-wrap">
-        {/* ── API errors ── */}
-        {apiError && (
-          <div className="alert alert-error mb-16">⚠ {apiError}</div>
-        )}
+      <ErrorBanner message={error} />
 
-        {/* ════ STATUS PANEL ════ */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 16, marginBottom: 20 }}>
-
-          {/* Left: verified badge + dataset info */}
-          <div className="section-card" style={{ padding: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-              <span className="badge-verified-lg" style={{
-                background: currentStatus === 'VERIFIED' ? 'var(--green)' : 'var(--red)'
-              }}>
-                <span className="badge-dot" />
-                {currentStatus === 'VERIFIED' ? 'VERIFIED' : 'VIOLATION'}
-              </span>
-              <button className="btn btn-ghost btn-sm" onClick={toggleSim}
-                style={{ fontSize: '0.75rem', color: 'var(--text-500)' }}>
-                ↻ Simulate State Toggle
-              </button>
-            </div>
-
-            <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--text-900)', marginBottom: 6 }}>
-              Autonomous-Vision-HQ-2025
-            </div>
-            <div style={{ display: 'inline-block', fontSize: '0.7rem', color: 'var(--primary)', background: 'var(--primary-muted)', borderRadius: 4, padding: '2px 7px', marginBottom: 12, fontWeight: 600 }}>
-              v4.2
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-500)', display: 'flex', gap: 12 }}>
-                <span>📁 Total Files: <strong style={{ color: 'var(--text-700)' }}>{counts.total.toLocaleString()}</strong></span>
-                <span>• Root: <code style={{ fontSize: '0.7rem', color: 'var(--primary)', fontFamily: 'JetBrains Mono' }}>0x9f4b...38e1</code></span>
-              </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-500)' }}>
-                💾 Storage: S3-Encrypted-Vault-East
-              </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-500)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span>🌿 Merkle Tree Depth: <strong style={{ color: 'var(--text-700)' }}>16 layers</strong></span>
-                <span style={{ color: 'var(--green)', fontWeight: 600 }}>99.998% Provenance</span>
+      {/* Status banner */}
+      {!loading && (
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+          <div className={`status-banner ${isVerified ? 'status-banner-verified' : 'status-banner-violation'}`}>
+            <span style={{ fontSize: '1.6rem' }}>{isVerified ? '✅' : '🔴'}</span>
+            <div>
+              <div>{isVerified ? 'VERIFIED — All datasets intact' : 'VIOLATION DETECTED — Dataset mismatch'}</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 400, marginTop: 4, opacity: 0.8 }}>
+                Last checked: {new Date().toLocaleString('en-IN', { hour12: false })}
               </div>
             </div>
           </div>
+        </div>
+      )}
 
-          {/* Center: stat grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            {[
-              { label: 'Unchanged', sublabel: 'Hash match verified',   dot: 'green', value: counts.unchanged.toLocaleString() },
-              { label: 'Modified',  sublabel: 'Zero drift detected',   dot: 'blue',  value: counts.modified.toLocaleString()  },
-              { label: 'Added',     sublabel: 'Verified additions',    dot: 'blue',  value: counts.added.toLocaleString()     },
-              { label: 'Deleted',   sublabel: 'No pruned tensors',     dot: 'gray',  value: counts.deleted.toLocaleString()   },
-            ].map(({ label, sublabel, dot, value }) => (
-              <div key={label} className="section-card stat-block">
-                <div className="stat-label">
-                  <span className={`stat-dot stat-dot--${dot}`} />
-                  {label}
-                </div>
-                <div className="stat-value">{value}</div>
-                <div className="stat-sub">{sublabel}</div>
-              </div>
-            ))}
-          </div>
+      {/* Count boxes */}
+      <div className="flex gap-4 mb-6" style={{ flexWrap: 'wrap' }}>
+        <CountBox label="Verified"  value={verified} color="#16A34A" />
+        <CountBox label="Modified"  value={modified} color="#DC2626" />
+        <CountBox label="Added"     value={added}    color="#2563EB" />
+        <CountBox label="Deleted"   value={deleted}  color="#DC2626" />
+        <CountBox label="Total"     value={datasets.length} color="#7C3AED" />
+      </div>
 
-
-          {/* Right: sentinel panel */}
-          <div className="section-card" style={{ padding: 16, minWidth: 180, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-500)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: 6 }}>
-              SECOPS SENTINEL
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--green)', display: 'inline-block', animation: 'pulse-dot 2s ease-in-out infinite' }} />
-              Live Node
+      {/* Verify output */}
+      {verifyResult && (
+        <div className={`alert ${verifyResult.ok && !verifyResult.errors ? 'alert-success' : 'alert-error'}`} style={{ marginBottom: 16 }}>
+          <div>
+            <div style={{ fontWeight: 700, marginBottom: 4 }}>
+              {verifyResult.ok && !verifyResult.errors ? '✅ Verification Passed' : '🔴 Verification Issues'}
             </div>
-            <p style={{ fontSize: '0.72rem', color: 'var(--text-500)', lineHeight: 1.5 }}>
-              Last verified <strong style={{ color: 'var(--text-700)' }}>2 minutes ago</strong> by<br/>
-              SecOps Sentinel (Worker #14).
-            </p>
-            <p style={{ fontSize: '0.72rem', color: 'var(--text-400)' }}>
-              Next scheduled scan: in <strong>28 mins</strong>
-            </p>
-            <button
-              className="btn btn-primary btn-sm"
-              style={{ marginTop: 4 }}
-              onClick={runVerify}
-              disabled={verifying}
-            >
-              {verifying ? <span className="spinner spinner--sm" /> : '↻'} Verify Dataset Now
-            </button>
-
-            {/* Show API output if available */}
-            {apiResult?.output && (
-              <div className="output-block" style={{ marginTop: 8, maxHeight: 80, fontSize: '0.65rem' }}>
-                {apiResult.output}
-              </div>
+            {verifyResult.output && (
+              <pre style={{ fontSize: '0.72rem', marginTop: 4, fontFamily: 'JetBrains Mono', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                {verifyResult.output.slice(0, 800)}
+              </pre>
+            )}
+            {verifyResult.errors && (
+              <pre style={{ fontSize: '0.72rem', marginTop: 4, fontFamily: 'JetBrains Mono', color: '#B91C1C', whiteSpace: 'pre-wrap' }}>
+                {verifyResult.errors.slice(0, 400)}
+              </pre>
             )}
           </div>
         </div>
+      )}
 
-        {/* ════ FILE TABLE ════ */}
-        <div className="section-card">
-          {/* Filter bar */}
-          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--card-border)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            {/* Search */}
-            <div className="search-input-wrap" style={{ width: 180 }}>
-              <span className="search-icon" style={{ fontSize: '0.8rem', color: 'var(--text-400)' }}>🔍</span>
-              <input className="input-field" placeholder="Filter by file" style={{ padding: '5px 10px 5px 28px', fontSize: '0.78rem', height: 30 }} />
-            </div>
-
-            {/* Tabs */}
-            <div className="filter-tabs">
-              {filterTabs.map(({ key, label, count }) => (
-                <button
-                  key={key}
-                  className={`filter-tab ${activeTab === key ? 'filter-tab--active' : ''}`}
-                  onClick={() => setActiveTab(key)}
-                >
-                  {label} ({count.toLocaleString()})
-                </button>
-              ))}
-            </div>
-
-            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-              <select className="input-field" style={{ width: 'auto', padding: '5px 28px 5px 10px', fontSize: '0.75rem', height: 30 }}>
-                <option>SHA-256 (Merkle DAG)</option>
-                <option>SHA-512</option>
-                <option>MD5</option>
-              </select>
-              <button className="btn btn-secondary btn-sm">⬇ Export CSV</button>
-            </div>
+      {/* Table */}
+      <div className="card" style={{ overflow: 'hidden' }}>
+        <div className="card-header">
+          <div>
+            <div className="card-title">Dataset Versions</div>
+            <div className="card-subtitle">All registered dataset snapshots with manifest hashes</div>
           </div>
-
-          {/* Table */}
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th style={{ width: 40 }}><input type="checkbox" /></th>
-                <th>File Name &amp; Storage Path</th>
-                <th>Expected Baseline Hash</th>
-                <th>Current Computed Hash</th>
-                <th>Status</th>
-                <th>Cryptographic Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredFiles.map((file, i) => {
-                const isModified = file.status === 'MODIFIED'
-                const isMissing  = file.status === 'DELETED'
-                return (
-                  <tr key={i} className={isModified ? 'row--modified' : ''}>
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={!!selected[i]}
-                        onChange={() => toggleSelect(i)}
-                        style={isModified ? { accentColor: 'var(--red)' } : {}}
-                      />
-                    </td>
-
-                    {/* File name */}
-                    <td className="td-filename">
-                      <span style={{ marginRight: 6, fontSize: '0.75rem' }}>
-                        {FILE_TYPE_ICONS[file.type] || FILE_TYPE_ICONS.default}
-                      </span>
-                      <span style={{ color: isModified ? 'var(--red)' : 'var(--text-900)', fontFamily: 'JetBrains Mono, monospace', fontSize: '0.75rem' }}>
-                        {file.name}
-                      </span>
-                    </td>
-
-                    {/* Baseline hash */}
-                    <td className="td-hash">
-                      <span style={{ background: file.status === 'ADDED' ? 'transparent' : '#f0fdf4', color: '#166534', padding: '2px 6px', borderRadius: 4, fontSize: '0.72rem', fontFamily: 'JetBrains Mono, monospace' }}>
-                        {file.baseline}
-                      </span>
-                    </td>
-
-                    {/* Computed hash */}
-                    <td className="td-hash">
-                      {isMissing ? (
-                        <span style={{ fontStyle: 'italic', color: 'var(--text-400)', fontSize: '0.72rem' }}>
-                          {file.computed}
-                        </span>
-                      ) : (
-                        <span style={{
-                          background: isModified ? '#fef2f2' : '#f0fdf4',
-                          color: isModified ? '#991b1b' : '#166534',
-                          padding: '2px 6px',
-                          borderRadius: 4,
-                          fontSize: '0.72rem',
-                          fontFamily: 'JetBrains Mono, monospace',
-                          border: isModified ? '1px solid #fecaca' : 'none'
-                        }}>
-                          {file.computed}
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Status */}
-                    <td>
-                      <StatusBadge status={file.status} size="sm" />
-                    </td>
-
-                    {/* Actions */}
-                    <td>
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <button className="tbl-action">Inspect<br/>Hash</button>
-                        {isModified ? (
-                          <button className="tbl-action tbl-action--danger">View<br/>Diff</button>
-                        ) : isMissing ? (
-                          <button className="tbl-action">View<br/>Log</button>
-                        ) : (
-                          <button className="tbl-action">View<br/>Diff</button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td colSpan={6}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span>Showing <strong>1 to 7</strong> of <strong>{counts.total.toLocaleString()}</strong> files &nbsp;•&nbsp; Merkle Verification DAG: Passed</span>
-
-                    {/* Pagination */}
-                    <div className="pagination" style={{ padding: 0 }}>
-                      <button className="page-btn page-btn--nav">⟨⟨</button>
-                      <button className="page-btn page-btn--nav">⟨</button>
-                      <button className="page-btn page-btn--active">1</button>
-                      <button className="page-btn">2</button>
-                      <button className="page-btn">3</button>
-                      <span className="page-dots">…</span>
-                      <button className="page-btn">6,893</button>
-                      <button className="page-btn page-btn--nav">⟩</button>
-                      <button className="page-btn page-btn--nav">⟩⟩</button>
-                    </div>
-                  </div>
-                </td>
-              </tr>
-            </tfoot>
-          </table>
+          <span style={{ fontSize: '0.72rem', color: '#64748B' }}>{datasets.length} total</span>
         </div>
+        {loading ? (
+          <Spinner text="Loading datasets…" />
+        ) : datasets.length === 0 ? (
+          <div className="spinner-wrap" style={{ color: '#94A3B8' }}>
+            <span style={{ fontSize: '1.5rem' }}>🗃️</span>
+            <span>No dataset versions registered yet</span>
+          </div>
+        ) : (
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Dataset Name</th>
+                  <th>Version</th>
+                  <th>Files</th>
+                  <th>Manifest Hash</th>
+                  <th>Created By</th>
+                  <th>Date</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {datasets.map((d, i) => {
+                  const statusKey = (d.status || 'VERIFIED').toUpperCase()
+                  const isViolation = /modif|delet|fail/i.test(d.status || '')
+                  return (
+                    <tr key={i} className={isViolation ? 'row-tampered' : ''}>
+                      <td style={{ fontWeight: 600, fontSize: '0.82rem' }}>{d.dataset_name}</td>
+                      <td>
+                        <code style={{ fontSize: '0.72rem', fontFamily: 'JetBrains Mono', background: '#EFF6FF', color: '#2563EB', padding: '2px 6px', borderRadius: 4 }}>
+                          {d.version}
+                        </code>
+                      </td>
+                      <td style={{ fontWeight: 600 }}>{d.total_files?.toLocaleString() ?? '—'}</td>
+                      <td>
+                        {d.manifest_hash ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <code style={{ fontSize: '0.68rem', fontFamily: 'JetBrains Mono', color: '#334155' }}>
+                              {d.manifest_hash.slice(0, 16)}…
+                            </code>
+                            <CopyBtn text={d.manifest_hash} />
+                          </div>
+                        ) : '—'}
+                      </td>
+                      <td style={{ fontSize: '0.78rem' }}>{d.created_by || '—'}</td>
+                      <td style={{ fontSize: '0.72rem', color: '#64748B', fontFamily: 'JetBrains Mono', whiteSpace: 'nowrap' }}>
+                        {d.created_at ? new Date(d.created_at).toLocaleDateString('en-IN') : '—'}
+                      </td>
+                      <td><StatusBadge status={statusKey} /></td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   )
