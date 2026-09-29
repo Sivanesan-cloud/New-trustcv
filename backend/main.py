@@ -4,8 +4,11 @@ import json
 import sqlite3
 import os
 
+# pyrefly: ignore [missing-import]
 from fastapi import FastAPI, Depends, HTTPException
+# pyrefly: ignore [missing-import]
 from fastapi.middleware.cors import CORSMiddleware
+# pyrefly: ignore [missing-import]
 from fastapi.security import OAuth2PasswordRequestForm
 
 from backend.db import insert_inference_run, get_all_inference_runs, get_all_models, log_action, get_all_audit_logs
@@ -143,10 +146,17 @@ def get_inference_logs():
     return {"inferences": get_all_inference_runs()}
 
 
+IMAGES_DIR = r"C:\TRUSTCV\New-trustcv\DATASET\test\images"
+
 @app.post("/inference/run")
 def run_inference(image_path: str, user=Depends(require_role(["ADMIN", "OPERATOR"]))):
+    full_image_path = os.path.join(IMAGES_DIR, image_path)
+
+    if not os.path.exists(full_image_path):
+        return {"status": "error", "details": f"Image not found: {full_image_path}"}
+
     result = subprocess.run(
-        [sys.executable, "inference/predict.py", image_path],
+        [sys.executable, "inference/predict.py", full_image_path],
         capture_output=True, text=True
     )
     if result.returncode != 0:

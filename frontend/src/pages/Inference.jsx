@@ -17,7 +17,7 @@ function CopyBtn({ text }) {
   const [copied, setCopied] = useState(false)
   return (
     <button className="copy-btn" onClick={() => {
-      navigator.clipboard?.writeText(text).catch(() => {})
+      navigator.clipboard?.writeText(text).catch(() => { })
       setCopied(true); setTimeout(() => setCopied(false), 1500)
     }}>{copied ? '✓' : '⧉'}</button>
   )
@@ -39,14 +39,18 @@ function HashRow({ label, hash }) {
   )
 }
 
-/* Bounding box overlay (static demo until real inference runs) */
+/* Real TRUSTCV helmet-detection classes, matching data.yaml order */
+const CLASS_NAMES = ['Helmet', 'No Helmet', 'Worker']
+const CLASS_COLORS = ['#16A34A', '#DC2626', '#2563EB']
+
+/* Bounding box overlay - only used as static decoration on the demo CCTV feed */
 const DEMO_BOXES = [
-  { x: '14%', y: '36%', w: '10%', h: '40%', color: '#F59E0B', label: 'Pedestrian 88.4%' },
-  { x: '56%', y: '35%', w: '32%', h: '35%', color: '#22D3EE', label: 'Vehicle 96.1%'    },
-  { x: '39%', y: '16%', w: '12%', h: '28%', color: '#A78BFA', label: 'Traffic Sign 99.2%' },
+  { x: '14%', y: '36%', w: '10%', h: '40%', color: '#F59E0B', label: 'Demo Box 1' },
+  { x: '56%', y: '35%', w: '32%', h: '35%', color: '#22D3EE', label: 'Demo Box 2' },
+  { x: '39%', y: '16%', w: '12%', h: '28%', color: '#A78BFA', label: 'Demo Box 3' },
 ]
 
-function DetectionOverlay({ boxes = DEMO_BOXES }) {
+function DetectionOverlay({ boxes = [] }) {
   return (
     <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
       {boxes.map((b, i) => (
@@ -87,15 +91,16 @@ function fmtDate(str) {
 
 export default function Inference() {
   const { user } = useAuth()
-  const [image, setImage]       = useState(null)
+  const [image, setImage] = useState(null)
   const [imageUrl, setImageUrl] = useState(null)
+  const [imgDims, setImgDims] = useState({ w: 1, h: 1 })
   const [dragging, setDragging] = useState(false)
-  const [running, setRunning]   = useState(false)
-  const [result, setResult]     = useState(null)
-  const [blocked, setBlocked]   = useState(false)
-  const [history, setHistory]   = useState([])
+  const [running, setRunning] = useState(false)
+  const [result, setResult] = useState(null)
+  const [blocked, setBlocked] = useState(false)
+  const [history, setHistory] = useState([])
   const [loadHist, setLoadHist] = useState(true)
-  const [error, setError]       = useState('')
+  const [error, setError] = useState('')
   const fileRef = useRef()
 
   const fetchHistory = useCallback(async () => {
@@ -122,6 +127,7 @@ export default function Inference() {
     setImage(file)
     setImageUrl(URL.createObjectURL(file))
     setResult(null)
+    setImgDims({ w: 1, h: 1 })
   }
 
   async function handleRun() {
@@ -148,6 +154,22 @@ export default function Inference() {
   }
 
   const predictions = result?.predictions || []
+
+  /* Convert real pixel-space bboxes from predict.py into %-based overlay boxes */
+  const realBoxes = predictions.map((p) => {
+    const [x1, y1, x2, y2] = p.bbox || [0, 0, 0, 0]
+    const name = CLASS_NAMES[p.class] ?? `Class ${p.class}`
+    const color = CLASS_COLORS[p.class] ?? '#94A3B8'
+    const conf = Math.round((p.confidence ?? 0) * 100)
+    return {
+      x: `${(x1 / imgDims.w) * 100}%`,
+      y: `${(y1 / imgDims.h) * 100}%`,
+      w: `${((x2 - x1) / imgDims.w) * 100}%`,
+      h: `${((y2 - y1) / imgDims.h) * 100}%`,
+      color,
+      label: `${name} ${conf}%`
+    }
+  })
 
   return (
     <div className="page-wrap fade-in">
@@ -205,8 +227,13 @@ export default function Inference() {
           {imageUrl ? (
             <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
               <div style={{ position: 'relative', lineHeight: 0 }}>
-                <img src={imageUrl} alt="Input" style={{ width: '100%', display: 'block', maxHeight: 380, objectFit: 'cover' }} />
-                {result && <DetectionOverlay boxes={DEMO_BOXES} />}
+                <img
+                  src={imageUrl}
+                  alt="Input"
+                  style={{ width: '100%', display: 'block', maxHeight: 380, objectFit: 'cover' }}
+                  onLoad={(e) => setImgDims({ w: e.target.naturalWidth, h: e.target.naturalHeight })}
+                />
+                {result && <DetectionOverlay boxes={realBoxes} />}
                 <div style={{ position: 'absolute', top: 10, left: 10 }}>
                   <span style={{
                     background: 'rgba(15,23,42,0.8)', color: '#fff', fontSize: '0.68rem',
@@ -224,7 +251,7 @@ export default function Inference() {
               </div>
             </div>
           ) : (
-            /* Default CCTV demo image */
+            /* Default CCTV demo image - decorative only, not real inference */
             <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
               <div style={{ position: 'relative', lineHeight: 0 }}>
                 <img src={cctvFeed} alt="CCTV Feed Demo" style={{ width: '100%', display: 'block', maxHeight: 380, objectFit: 'cover' }} />
@@ -272,8 +299,8 @@ export default function Inference() {
             <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 14 }}>
               Cryptographic Hash Proofs
             </div>
-            <HashRow label="Input Hash"  hash={result?.input_hash  || '— run inference to generate —'} />
-            <HashRow label="Model Hash"  hash={result?.model_hash  || '— run inference to generate —'} />
+            <HashRow label="Input Hash" hash={result?.input_hash || '— run inference to generate —'} />
+            <HashRow label="Model Hash" hash={result?.model_hash || '— run inference to generate —'} />
             <HashRow label="Output Hash" hash={result?.output_hash || '— run inference to generate —'} />
             {result && (
               <div className="badge badge-verified mt-3" style={{ fontSize: '0.72rem' }}>
@@ -283,38 +310,23 @@ export default function Inference() {
           </div>
 
           {/* Predictions */}
-          {predictions.length > 0 && (
+          {result && (
             <div className="card card-pad">
               <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 14 }}>
                 Predictions
               </div>
-              {predictions.map((p, i) => (
-                <ConfidenceBar
-                  key={i}
-                  label={p.class || p.label || `Detection ${i + 1}`}
-                  value={Math.round((p.confidence || p.score || 0) * 100)}
-                  color={i === 0 ? '#2563EB' : i === 1 ? '#16A34A' : '#7C3AED'}
-                />
-              ))}
-              {predictions.length === 0 && (
-                <>
-                  <ConfidenceBar label="Pedestrian"   value={88} color="#F59E0B" />
-                  <ConfidenceBar label="Vehicle"      value={96} color="#22D3EE" />
-                  <ConfidenceBar label="Traffic Sign" value={99} color="#A78BFA" />
-                </>
+              {predictions.length > 0 ? (
+                predictions.map((p, i) => (
+                  <ConfidenceBar
+                    key={i}
+                    label={CLASS_NAMES[p.class] ?? `Class ${p.class}`}
+                    value={Math.round((p.confidence ?? 0) * 100)}
+                    color={CLASS_COLORS[p.class] ?? '#94A3B8'}
+                  />
+                ))
+              ) : (
+                <div style={{ fontSize: '0.8rem', color: '#94A3B8' }}>No objects detected in this image.</div>
               )}
-            </div>
-          )}
-
-          {/* Demo predictions when result available */}
-          {result && predictions.length === 0 && (
-            <div className="card card-pad">
-              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 14 }}>
-                Detections
-              </div>
-              <ConfidenceBar label="Pedestrian"   value={88} color="#F59E0B" />
-              <ConfidenceBar label="Vehicle"      value={96} color="#22D3EE" />
-              <ConfidenceBar label="Traffic Sign" value={99} color="#A78BFA" />
             </div>
           )}
         </div>

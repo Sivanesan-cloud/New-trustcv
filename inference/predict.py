@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from ultralytics import YOLO
@@ -7,6 +8,11 @@ from ultralytics import YOLO
 MODEL_PATH = r"C:\TRUSTCV\New-trustcv\models\helmet_final\weights\best.pt"
 REGISTRY_PATH = r"C:\TRUSTCV\New-trustcv\models\model_registry.json"
 INFERENCE_LOG = r"C:\TRUSTCV\New-trustcv\models\inference_log.json"
+
+# Annotated output images are saved OUTSIDE the trusted dataset folder
+# so they never trigger false "ADDED FILE" integrity violations.
+ANNOTATED_DIR = r"C:\TRUSTCV\New-trustcv\inference\annotated_outputs"
+os.makedirs(ANNOTATED_DIR, exist_ok=True)
 
 
 def sha256_file(path):
@@ -40,7 +46,11 @@ def run_inference(image_path):
 
     model = YOLO(MODEL_PATH)
     results = model.predict(image_path, verbose=False)
-    annotated_path = image_path.rsplit(".", 1)[0] + "_annotated.jpg"
+
+    # Build annotated output filename from just the base image name,
+    # saved into ANNOTATED_DIR instead of alongside the source image.
+    base_name = os.path.basename(image_path).rsplit(".", 1)[0]
+    annotated_path = os.path.join(ANNOTATED_DIR, f"{base_name}_annotated.jpg")
     results[0].save(filename=annotated_path)
 
     boxes = results[0].boxes
@@ -56,16 +66,16 @@ def run_inference(image_path):
     output_hash = sha256_bytes(output_str.encode())
 
     record = {
-    "inference_id": f"INF-{int(datetime.now().timestamp())}",
-    "input_image": image_path,
-    "annotated_image": annotated_path,
-    "input_hash": input_hash,
-    "model_hash": model_hash,
-    "output_hash": output_hash,
-    "predictions": predictions,
-    "timestamp": datetime.now(timezone.utc).isoformat(),
-    "user": "OPERATOR_01"
-}
+        "inference_id": f"INF-{int(datetime.now().timestamp())}",
+        "input_image": image_path,
+        "annotated_image": annotated_path,
+        "input_hash": input_hash,
+        "model_hash": model_hash,
+        "output_hash": output_hash,
+        "predictions": predictions,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "user": "OPERATOR_01"
+    }
 
     try:
         with open(INFERENCE_LOG) as f:

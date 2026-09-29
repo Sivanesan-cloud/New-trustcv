@@ -50,12 +50,12 @@ function fmtDate(str) {
 
 export default function Overview() {
   const nav = useNavigate()
-  const [stats, setStats]     = useState(null)
+  const [stats, setStats] = useState(null)
   const [activity, setActivity] = useState([])
   const [loading, setLoading] = useState(true)
-  const [error, setError]     = useState('')
+  const [error, setError] = useState('')
   const [backendOk, setBackendOk] = useState(false)
-  const [dbOk, setDbOk]         = useState(false)
+  const [dbOk, setDbOk] = useState(false)
 
   const fetchData = useCallback(async () => {
     setLoading(true)

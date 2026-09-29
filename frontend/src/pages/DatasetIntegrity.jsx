@@ -40,6 +40,26 @@ function CountBox({ label, value, color }) {
   )
 }
 
+/** Extract file-level counts from verify script stdout */
+function parseVerifyOutput(text) {
+  if (!text) return null
+  const num = (pattern) => {
+    const m = text.match(pattern)
+    return m ? parseInt(m[1], 10) : null
+  }
+  const unchanged = num(/Unchanged\s*:\s*(\d+)/i)
+  const modified  = num(/Modified\s*:\s*(\d+)/i)
+  const added     = num(/Added\s*:\s*(\d+)/i)
+  const deleted   = num(/Deleted\s*:\s*(\d+)/i)
+  if (unchanged === null && modified === null && added === null && deleted === null) return null
+  return {
+    unchanged: unchanged ?? 0,
+    modified:  modified  ?? 0,
+    added:     added     ?? 0,
+    deleted:   deleted   ?? 0,
+  }
+}
+
 export default function DatasetIntegrity() {
   const [datasets, setDatasets] = useState([])
   const [loading, setLoading]   = useState(true)
@@ -63,17 +83,26 @@ export default function DatasetIntegrity() {
     setVerifying(true); setVerifyResult(null); setError('')
     try {
       const res = await api.get('/dataset/verify')
-      setVerifyResult({ ok: !res.data.errors, output: res.data.output, errors: res.data.errors })
+      const parsed = parseVerifyOutput(res.data.output)
+      setVerifyResult({
+        ok: !res.data.errors,
+        output: res.data.output,
+        errors: res.data.errors,
+        parsed,
+      })
     } catch {
       setError('Verification failed — backend error.')
     } finally { setVerifying(false) }
   }
 
-  // Compute counts from dataset statuses
-  const verified   = datasets.filter(d => (d.status || '').toUpperCase() === 'VERIFIED').length
-  const modified   = datasets.filter(d => /modif/i.test(d.status || '')).length
-  const added      = datasets.filter(d => /add/i.test(d.status || '')).length
-  const deleted    = datasets.filter(d => /delet/i.test(d.status || '')).length
+  // Live counts: use parsed file-level counts from verify output if available,
+  // otherwise fall back to dataset-row status counts.
+  const fileCounts = verifyResult?.parsed
+  const verified   = fileCounts ? (fileCounts.unchanged) : datasets.filter(d => (d.status || '').toUpperCase() === 'VERIFIED').length
+  const modified   = fileCounts ? fileCounts.modified  : datasets.filter(d => /modif/i.test(d.status || '')).length
+  const added      = fileCounts ? fileCounts.added     : datasets.filter(d => /add/i.test(d.status || '')).length
+  const deleted    = fileCounts ? fileCounts.deleted   : datasets.filter(d => /delet/i.test(d.status || '')).length
+  const total      = fileCounts ? (fileCounts.unchanged + fileCounts.modified + fileCounts.added + fileCounts.deleted) : datasets.length
   const hasViolation = modified > 0 || deleted > 0
 
   // Determine banner status: use verifyResult if available, else infer from data
@@ -131,11 +160,11 @@ export default function DatasetIntegrity() {
 
       {/* Count boxes */}
       <div className="flex gap-4 mb-6" style={{ flexWrap: 'wrap' }}>
-        <CountBox label="Verified"  value={verified} color="#16A34A" />
+        <CountBox label={fileCounts ? 'Unchanged' : 'Verified'} value={verified} color="#16A34A" />
         <CountBox label="Modified"  value={modified} color="#DC2626" />
         <CountBox label="Added"     value={added}    color="#2563EB" />
         <CountBox label="Deleted"   value={deleted}  color="#DC2626" />
-        <CountBox label="Total"     value={datasets.length} color="#7C3AED" />
+        <CountBox label="Total"     value={total}    color="#7C3AED" />
       </div>
 
       {/* Verify output */}
